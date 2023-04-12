@@ -27,6 +27,8 @@ async function run(){
     const regionsCollection = client.db('captainPenProduct').collection('regions');
     const shopsCollection = client.db('captainPenProduct').collection('shops'); 
     const transactionCollection = client.db('captainPenProduct').collection('transaction'); 
+    const dueTrackingCollection = client.db('captainPenProduct').collection('DueTracking'); 
+    const dueRecoveryCollection = client.db('captainPenProduct').collection('dueRecovery'); 
     const productIndex = await productsCollection.createIndex({ "product_name":1 }, { unique: true });
     const userIndex = await userCollection.createIndex({"username":1},{ unique: true });
     const productCodeIndex = await productsCollection.createIndex({"product_code":1},{ unique: true });
@@ -45,7 +47,30 @@ async function run(){
             res.send(users);
         })
 
+        //get all due for different shops
+
+        app.get('/due',async(req,res)=>{
+            let query = {};
+            if(req.query){
+                query = req.query;
+            }
+            const cursor = dueTrackingCollection.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
+        
         //get user against id
+
+        app.get('/due-recovery',async(req,res)=>{
+            let query = {};
+            if(req.query){
+                query = req.query;
+            }
+            const cursor = dueRecoveryCollection.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
 
         app.get('/users/:id',async(req,res)=>{
             const id = req.params.id;
@@ -67,7 +92,10 @@ async function run(){
         //get all transactions
         
         app.get('/transaction',async(req,res)=>{
-            const query = {};
+            let query = {};
+            if(req.query){
+                query = req.query;
+            }
             const cursor = transactionCollection.find(query);
             const result = await cursor.toArray();
             res.send(result);
@@ -399,6 +427,22 @@ async function run(){
             res.send(result);
         })
 
+        //add a due recovery
+
+        app.post('/due-recovery',async(req,res)=>{
+            const item = req.body;
+            const result = await dueRecoveryCollection.insertOne(item);
+            res.send(result);
+        })
+
+        //add a due 
+
+        app.post('/due',async(req,res)=>{
+            const item = req.body;
+            const result = await dueTrackingCollection.insertOne(item);
+            res.send(result);
+        })
+
         //add region 
 
         app.post('/region',async(req,res)=>{
@@ -486,6 +530,21 @@ async function run(){
             res.send(result);
         })
         
+        //upsert due 
+
+        app.put('/due/:id',async(req,res)=>{
+            const id = req.params.id;
+            const filter = {_id:new ObjectId(id)};
+            const user = req.body;
+            const option = {upsert:true};
+            const updateDue ={
+                $set:{
+                        due:user.due               
+                }
+            }
+            const result = await dueTrackingCollection.updateOne(filter, updateDue,option);
+            res.send(result);
+        })
         //update category layer
 
         app.put('/item-layers/:id', async(req,res)=>{
