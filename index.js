@@ -42,10 +42,12 @@ async function run(){
             if(req.query){
                 query=req.query;
             }
-            const cursor = userCollection.find(query);
+            // query.select('-password');
+            const cursor = userCollection.find(query,{username:1,_id:1,password:0});
             const users = await cursor.toArray();
             res.send(users);
         })
+        
 
         //get all due for different shops
 
@@ -225,7 +227,10 @@ async function run(){
         //get distribution details to sr
 
         app.get('/distribution-details-sr',async(req,res)=>{
-            const query = {};
+            let query = {};
+            if(req.query){
+                query = req.query;
+            }
             const cursor = distributeToSrCollection.find(query);
             const result = await cursor.toArray();
             res.send(result);
