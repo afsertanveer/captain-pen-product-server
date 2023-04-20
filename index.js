@@ -290,6 +290,15 @@ async function run(){
             res.send(result);
         })
 
+        //get all layers of item against id
+        app.get('/item-layers/:id',async(req,res)=>{
+            let id = req.params.id;
+            const query = {_id: new ObjectId(id)}
+            const cursor = layersCollection.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
         //get item against id
 
         app.get('/items/:id',async(req,res)=>{
