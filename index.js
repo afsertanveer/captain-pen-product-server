@@ -568,8 +568,7 @@ async function run(){
             const option = {upsert:true};
             const updatedUser ={
                 $set:{
-                        item_id:layerItem.item_id,
-                        layers:layerItem.layers                   
+                        layers:layerItem                 
                 }
             }
             const result = await layersCollection.updateOne(filter, updatedUser,option);
