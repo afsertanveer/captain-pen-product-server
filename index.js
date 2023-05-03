@@ -21,6 +21,7 @@ async function run(){
     const primaryItemCollection = client.db('captainPenProduct').collection('primaryItem');
     const layersCollection = client.db('captainPenProduct').collection('itemWithLayers');
     const productsCollection = client.db('captainPenProduct').collection('products');
+    const coreProductsCollection = client.db('captainPenProduct').collection('coreProducts');
     const distributedProductsCollection = client.db('captainPenProduct').collection('distributedProducts');
     const distributeToSrCollection = client.db('captainPenProduct').collection('distributedProductsToSr');
     const distributionToShopCollection = client.db('captainPenProduct').collection('distributionToShop');
@@ -60,7 +61,18 @@ async function run(){
             const result = await cursor.toArray();
             res.send(result);
         })
+        
+        //get core products
 
+        app.get('/core-products',async(req,res)=>{
+            let query = {};
+            if(req.query){
+                query = req.query;
+            }
+            const cursor = coreProductsCollection.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
         
         //get user against id
 
@@ -480,6 +492,13 @@ async function run(){
             res.send(result);
         })
 
+        //add a product in core
+        app.post('/core-products',async(req,res)=>{
+            const product = req.body;
+            const result = await coreProductsCollection.insertOne(product);
+            res.send(result);
+        })
+
         //add distribute product
 
         app.post('/distributed-product',async(req,res)=>{
@@ -521,13 +540,30 @@ async function run(){
             const option = {upsert:true};
             const updatedUser ={
                 $set:{
-                        password:user.password,                
+                        password:user.password,
+                
                 }
             }
             const result = await userCollection.updateOne(filter, updatedUser,option);
             res.send(result);
         })
 
+        //update user region
+
+        app.put('/users-region/:id', async(req,res)=>{
+            const id = req.params.id;
+            const filter = {_id:new ObjectId(id)};
+            const user = req.body;
+            const option = {upsert:true};
+            const updatedUser ={
+                $set:{
+                        password:user.regionId,
+                
+                }
+            }
+            const result = await userCollection.updateOne(filter, updatedUser,option);
+            res.send(result);
+        })
         //update cv of users
 
         app.put('/users-cv/:id', async(req,res)=>{
