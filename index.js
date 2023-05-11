@@ -122,7 +122,8 @@ async function run(){
             if(req.query){
                 query = req.query;
             }
-            const result = await shopsCollection.find(query).toArray();
+            const cursor = shopsCollection.find(query).sort({created_at:-1});
+            const result = await cursor.toArray();
             res.send(result);
         })
 
@@ -424,8 +425,11 @@ async function run(){
         //show distributions of shop
 
         app.get('/distributed-product-to-shop',async(req,res)=>{
-            const query ={};
-            const cursor = distributionToShopCollection.find(query);
+            let query ={};
+            if(req.query){
+                query = req.query;
+            }
+            const cursor = distributionToShopCollection.find(query).sort({transaction_id:1});
             const result = await cursor.toArray();
             res.send(result);
         })
