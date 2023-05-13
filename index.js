@@ -81,7 +81,7 @@ async function run(){
             if(req.query){
                 query = req.query;
             }
-            const cursor = dueRecoveryCollection.find(query);
+            const cursor = dueRecoveryCollection.find(query).sort({issue_date:-1});
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -110,7 +110,7 @@ async function run(){
             if(req.query){
                 query = req.query;
             }
-            const cursor = transactionCollection.find(query);
+            const cursor = transactionCollection.find(query).sort({issue_date:1});
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -429,7 +429,7 @@ async function run(){
             if(req.query){
                 query = req.query;
             }
-            const cursor = distributionToShopCollection.find(query).sort({transaction_id:1});
+            const cursor = distributionToShopCollection.find(query).sort({transaction_id:-1});
             const result = await cursor.toArray();
             res.send(result);
         })
