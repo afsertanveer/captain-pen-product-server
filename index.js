@@ -169,24 +169,267 @@ async function run(){
                   }
             
               ]).toArray();
-              console.log(salesCollection[0].userDetails.zone.region_name);
-              console.log(req.query.shopName,req.query.adminName,req.query.startDate,req.query.endDate ,req.query.zoneName);
               if(req.query.shopName || req.query.adminName || req.query.asmName || req.query.zoneName ||req.query.srName || req.query.zoneName){
-                salesCollection= salesCollection.filter(sc=>
-                    (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
-                    (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
-                    (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
-                    (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
-                    (sc.userDetails.zone.region_name === (req.query.zoneName==="null"? sc.userDetails.zone.region_name : req.query.zoneName )) &&
-                    (Date.parse(sc.recieved_date)>=(req.query.startDate==="null"? Date.parse(sc.recieved_date ): Date.parse(req.query.startDate))) &&
-                    (Date.parse(sc.recieved_date)<=(req.query.endDate==="null"? Date.parse(sc.recieved_date) : Date.parse(req.query.endDate))) 
-                  )
+                if(req.query.startDate===req.query.endDate){
+                    
+                    salesCollection= salesCollection.filter(sc=>
+                        (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.userDetails.zone.region_name === (req.query.zoneName==="null"? sc.userDetails.zone.region_name : req.query.zoneName )) &&
+                         ((sc.recieved_date).split("T")[0]===(req.query.startDate==="null"? (sc.recieved_date).split("T")[0] : req.query.startDate))
+                      )
+                }else{
+                    salesCollection= salesCollection.filter(sc=>
+                        (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.userDetails.zone.region_name === (req.query.zoneName==="null"? sc.userDetails.zone.region_name : req.query.zoneName )) &&
+                        ((sc.recieved_date).split("T")[0] >=(req.query.startDate==="null"?(sc.recieved_date).split("T")[0]: (req.query.startDate))) &&
+                        ((sc.recieved_date).split("T")[0]<=(req.query.endDate==="null"?(sc.recieved_date).split("T")[0] : (req.query.endDate))) 
+                      )
+                }
               }
               
              res.send(salesCollection);
         })
+        
+        // shop reports
+        app.get('/shop-report',async(req,res)=>{
+            let query = {};
+            let shopReport = await shopsCollection.aggregate([
+                { "$addFields": { "regionId": { "$toObjectId": "$region_id" }}},
+                { "$addFields": { "srId": { "$toObjectId": "$managed_by" }}},
+                { "$lookup": {
+                    "from": "regions",
+                    "localField": "regionId",
+                    "foreignField": "_id",
+                    "as": "regionDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$regionDetails",
+                      }
+                    },
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "srId",
+                    "foreignField": "_id",
+                    "as": "userDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$userDetails",
+                      }
+                    },                    
+                { "$addFields": { "shopId": { "$toString": "$_id" }}},
+                { "$lookup": {
+                    "from": "dueRecovery",
+                    "localField": "shopId",
+                    "foreignField": "shop_id",
+                    "as": "dueRecoveryDetails"
+                  }},
+                  
+                { "$lookup": {
+                    "from": "DueTracking",
+                    "localField": "shopId",
+                    "foreignField": "shop_id",
+                    "as": "dueTrackingDetails"
+                  }},
+                  
+                { "$addFields": { "asmId": { "$toObjectId": "$userDetails.managed_by" }}},
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "asmId",
+                    "foreignField": "_id",
+                    "as": "userDetails.asm"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$userDetails.asm",
+                      }
+                    },
+                    { "$addFields": { "adminId": { "$toObjectId": "$userDetails.asm.managed_by" }}},
+                    { "$lookup": {
+                        "from": "users",
+                        "localField": "adminId",
+                        "foreignField": "_id",
+                        "as": "userDetails.asm.admin"
+                      }},
+                      {
+                          $unwind: {
+                            path: "$userDetails.asm.admin",
+                          }
+                        },
+                        {
+                            "$project": {
+                              "_id": 1,
+                              "shop_name":1,
+                              "address":1,
+                              "created_at":1,
+                              "userDetails._id":1,
+                              "userDetails.name":1,
+                              "userDetails.managed_by":1,
+                              "regionDetails.region_name":1,
+                              "userDetails.asm.name":1,
+                              "userDetails.asm.managed_by":1,
+                              "userDetails.asm.admin.name":1,
+                              "dueTrackingDetails.due":1,
+                              "dueRecoveryDetails.paying_amount":1,
+                              "dueRecoveryDetails.issue_date":1
+                            }
+                          }
 
+            ]).toArray();
+            if(req.query.shopName || req.query.adminName || req.query.asmName || req.query.zoneName ||req.query.srName || req.query.zoneName){
+                if(req.query.startDate===req.query.endDate){
+                    shopReport= shopReport.filter(sc=>
+                        (sc.shop_name===(req.query.shopName==="null"?sc.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.regionDetails.region_name === (req.query.zoneName==="null"? sc.regionDetails.region_name : req.query.zoneName )) &&
+                        ((sc.created_at).split("T")[0]===(req.query.startDate==="null"? (sc.created_at).split("T")[0] : req.query.startDate))
+                      )
+                  }else{
+                    shopReport= shopReport.filter(sc=>
+                        (sc.shop_name===(req.query.shopName==="null"?sc.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.regionDetails.region_name === (req.query.zoneName==="null"? sc.regionDetails.region_name : req.query.zoneName )) &&
+                        ((sc.created_at).split("T")[0] >=(req.query.startDate==="null"?(sc.created_at).split("T")[0]: (req.query.startDate))) &&
+                        ((sc.created_at).split("T")[0]<=(req.query.endDate==="null"?(sc.created_at).split("T")[0] : (req.query.endDate))) 
+                      )
+                  }
+                }
+            res.send(shopReport);
+        })
+
+        //cash colelction report
+
+        app.get('/cash-collection-report',async(req,res)=>{
+            let query = {};
+            let cashReport = await dueRecoveryCollection.aggregate([
+                { "$addFields": { "srId": { "$toObjectId": "$seller_id" }}},
+                { "$addFields": { "shopId": { "$toObjectId": "$shop_id" }}},
+                { "$lookup": {
+                    "from": "shops",
+                    "localField": "shopId",
+                    "foreignField": "_id",
+                    "as": "shopDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$shopDetails",
+                      }
+                    },
+                    {"$addFields":{"regionID":{"$toObjectId":"$shopDetails.region_id"}}},
+                    {
+                        "$lookup":{
+                            "from":"regions",
+                            "localField":"regionID",
+                            "foreignField":"_id",
+                            "as":"shopDetails.region"
+                        }
+                    },
+                    {
+                        $unwind:{
+                            path:"$shopDetails.region"
+                        }
+                    },
+                    {
+                        "$lookup":{
+                            "from":"DueTracking",
+                            "localField":"shop_id",
+                            "foreignField":"shop_id",
+                            "as":"dueDetails"
+                        }
+                    },
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "srId",
+                    "foreignField": "_id",
+                    "as": "userDetails"
+                  }},
+                  {
+                    $unwind: {
+                      path: "$userDetails",
+                    }
+                  },
+                  { "$addFields": { "asmId": { "$toObjectId": "$userDetails.managed_by" }}},
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "asmId",
+                    "foreignField": "_id",
+                    "as": "userDetails.asm"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$userDetails.asm",
+                      }
+                    },
+                    { "$addFields": { "adminId": { "$toObjectId": "$userDetails.asm.managed_by" }}},
+                    { "$lookup": {
+                        "from": "users",
+                        "localField": "adminId",
+                        "foreignField": "_id",
+                        "as": "userDetails.asm.admin"
+                      }},
+                      {
+                          $unwind: {
+                            path: "$userDetails.asm.admin",
+                          }
+                        },
+                        {
+                            "$project": {
+                              "_id": 1,
+                              "shopDetails.shop_name":1,
+                              "shopDetails.address":1,
+                              "shopDetails.region_id":1,
+                              "shopDetails.region.region_name":1,
+                              "dueDetails.due":1,
+                              "issue_date":1,
+                              "bill_link":1,
+                              "paying_amount":1,
+                              "userDetails._id":1,
+                              "userDetails.name":1,
+                              "userDetails.managed_by":1,
+                              "regionDetails.region_name":1,
+                              "userDetails.asm.name":1,
+                              "userDetails.asm.managed_by":1,
+                              "userDetails.asm.admin.name":1,
+                            }
+                          }
+            ]).toArray();
+            if(req.query.shopName || req.query.adminName || req.query.asmName || req.query.zoneName ||req.query.srName || req.query.zoneName){
+                if(req.query.startDate===req.query.endDate){
+                    cashReport= cashReport.filter(sc=>
+                        (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.shopDetails.region.region_name === (req.query.zoneName==="null"? sc.shopDetails.region.region_name : req.query.zoneName )) &&
+                        ((sc.issue_date).split("T")[0]===(req.query.startDate==="null"? (sc.issue_date).split("T")[0] : req.query.startDate))
+                      )
+                  }else{
+                    cashReport= cashReport.filter(sc=>
+                        (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
+                        (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                        (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                        (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                        (sc.shopDetails.region.region_name === (req.query.zoneName==="null"? sc.shopDetails.region.region_name : req.query.zoneName )) &&
+                        ((sc.issue_date).split("T")[0] >=(req.query.startDate==="null"?(sc.issue_date).split("T")[0]: (req.query.startDate))) &&
+                        ((sc.issue_date).split("T")[0]<=(req.query.endDate==="null"?(sc.issue_date).split("T")[0] : (req.query.endDate))) 
+                      )
+                  }
+                }
+            res.send(cashReport)
+        })
        
+        
 
         //get all due for different shops
 
