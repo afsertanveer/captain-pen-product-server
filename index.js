@@ -1,4 +1,5 @@
 const express = require('express');
+const {upload} = require("./utilities/multer");
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
@@ -7,6 +8,8 @@ require('dotenv').config();
 //middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static('static')); 
+app.use('/images', express.static('images'))
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gt8bmu9.mongodb.net/?retryWrites=true&w=majority`;
@@ -49,6 +52,141 @@ async function run(){
             res.send(users);
         })
         
+        app.get('/sales',async(req,res)=>{
+            let query ={};
+            let salesCollection =await  distributionToShopCollection.aggregate([
+                { "$addFields": { "srId": { "$toObjectId": "$sender_id" }}},
+                { "$addFields": { "shopId": { "$toObjectId": "$reciever_id" }}},  
+                { "$lookup": {
+                  "from": "users",
+                  "localField": "srId",
+                  "foreignField": "_id",
+                  "as": "userDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$userDetails",
+                    }
+                  },
+                { "$lookup": {
+                  "from": "shops",
+                  "localField": "shopId",
+                  "foreignField": "_id",
+                  "as": "shopDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$shopDetails",
+                    }
+                  },
+                { "$lookup": {
+                    "from": "transaction",
+                    "localField": "transaction_id",
+                    "foreignField": "transaction_id",
+                    "as": "transactionDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$transactionDetails",
+                      }
+                    },
+                  
+                { "$addFields": { "asmId": { "$toObjectId": "$userDetails.managed_by" }}},
+                { "$addFields": { "regionId": { "$toObjectId": "$userDetails.region_id" }}},
+                { "$lookup": {
+                    "from": "regions",
+                    "localField": "regionId",
+                    "foreignField": "_id",
+                    "as": "userDetails.zone"
+                  }},
+                  {
+                    $unwind: {
+                      path: "$userDetails.zone",
+                    }
+                  },
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "asmId",
+                    "foreignField": "_id",
+                    "as": "userDetails.asm"
+                  }},
+                  {
+                    $unwind: {
+                      path: "$userDetails.asm",
+                    }
+                  },
+                  { "$addFields": { "adminId": { "$toObjectId": "$userDetails.asm.managed_by" }}},
+                  { "$lookup": {
+                    "from": "users",
+                    "localField": "adminId",
+                    "foreignField": "_id",
+                    "as": "userDetails.asm.admin"
+                  }},
+                  
+                  {
+                    $unwind: {
+                      path: "$userDetails.asm.admin",
+                    }
+                  },
+                  { "$lookup": {
+                    "from": "products",
+                    "localField": "product_name",
+                    "foreignField": "product_name",
+                    "as": "productDetails"
+                  }},
+                  {
+                    $unwind: {
+                      path: "$productDetails",
+                    }
+                  },
+                {
+                    "$project": {
+                      "_id": 1,
+                      "product_name":1,
+                      "distributed_amount":1,
+                      "recieved_date":1,
+                      "distributed_amount":1,
+                      "price_per_unit":1,
+                      "userDetails._id":1,
+                      "userDetails.name":1,
+                      "userDetails.region_id":1,
+                      "userDetails.managed_by":1,
+                      "userDetails.zone.region_name":1, 
+                      "userDetails.zone._id":1, 
+                      "userDetails.asm.name":1,
+                      "userDetails.asm.managed_by":1,
+                      "userDetails.asm.admin.name":1,
+                      "shopDetails._id":1,
+                      "shopDetails.shop_name":1,
+                      "shopDetails.address":1,
+                      "transactionDetails.transaction_id":1,
+                      "transactionDetails.bill_img":1,
+                      "transactionDetails.discount":1,
+                      "transactionDetails.due":1, 
+                      "transactionDetails.total_bill":1, 
+                      "productDetails.unit_price":1,
+                    }
+                  }
+            
+              ]).toArray();
+              console.log(salesCollection[0].userDetails.zone.region_name);
+              console.log(req.query.shopName,req.query.adminName,req.query.startDate,req.query.endDate ,req.query.zoneName);
+              if(req.query.shopName || req.query.adminName || req.query.asmName || req.query.zoneName ||req.query.srName || req.query.zoneName){
+                salesCollection= salesCollection.filter(sc=>
+                    (sc.shopDetails.shop_name===(req.query.shopName==="null"?sc.shopDetails.shop_name : req.query.shopName )) &&
+                    (sc.userDetails.asm.admin.name===(req.query.adminName==="null"?sc.userDetails.asm.admin.name: req.query.adminName  )) &&
+                    (sc.userDetails.asm.name===(req.query.asmName==="null"?sc.userDetails.asm.name: req.query.asmName  ))  &&
+                    (sc.userDetails.name===(req.query.srName==="null"? sc.userDetails.name : req.query.srName)) &&
+                    (sc.userDetails.zone.region_name === (req.query.zoneName==="null"? sc.userDetails.zone.region_name : req.query.zoneName )) &&
+                    (Date.parse(sc.recieved_date)>=(req.query.startDate==="null"? Date.parse(sc.recieved_date ): Date.parse(req.query.startDate))) &&
+                    (Date.parse(sc.recieved_date)<=(req.query.endDate==="null"? Date.parse(sc.recieved_date) : Date.parse(req.query.endDate))) 
+                  )
+              }
+              
+             res.send(salesCollection);
+        })
+
+       
 
         //get all due for different shops
 
@@ -127,6 +265,7 @@ async function run(){
             res.send(result);
         })
 
+        
         // get shop against id
 
         app.get('/shop/:id',async(req,res)=>{
@@ -521,12 +660,28 @@ async function run(){
 
         //add distribution product to shop
 
-        app.post('/distributed-product-to-shop',async(req,res)=>{
+        app.post('/distributed-product-to-shop', async(req,res)=>{
             const sendShop = req.body;
+           
+            console.log(sendShop.img);
             const result = await distributionToShopCollection.insertOne(sendShop);
-            res.send(result);
+            res.send();
         })
 
+        app.post("/img-upload",upload.single("image"),async(req,res)=>{
+            console.log(req.body);
+            const file = req.file;
+            console.log(file);
+            const path =`uploads/`.concat(file.filename);
+            res.send(path); 
+
+        })
+        app.post('/api/images',upload.single("image"), (req, res) => {
+            const file = req.file;
+            console.log(file.filename);
+            const path =`uploads/`.concat(file.filename);
+            res.send(path); 
+          })
         //add a shop
 
         app.post('/shop',async(req,res)=>{
