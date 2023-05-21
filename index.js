@@ -165,6 +165,8 @@ async function run(){
                       "transactionDetails.due":1, 
                       "transactionDetails.total_bill":1, 
                       "productDetails.unit_price":1,
+                      "productDetails.category":1,
+                      "productDetails.secondary_category":1,
                     }
                   }
             
@@ -428,8 +430,208 @@ async function run(){
                 }
             res.send(cashReport)
         })
-       
-        
+
+        //admin distribution to asm 
+        app.get('/admin-send-asm',async(req,res)=>{
+            let query ={};
+            let report = await distributedProductsCollection.aggregate([
+                { "$addFields": { "admin": { "$toObjectId": "$sender_id" }}},
+                { "$addFields": { "asm": { "$toObjectId": "$reciever_id" }}},
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "admin",
+                    "foreignField": "_id",
+                    "as": "adminUserDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$adminUserDetails",
+                      }
+                    },
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "asm",
+                    "foreignField": "_id",
+                    "as": "asmUserDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$asmUserDetails",
+                      }
+                    },
+                { "$lookup": {
+                    "from": "products",
+                    "localField": "product_name",
+                    "foreignField": "product_name",
+                    "as": "productDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$productDetails",
+                      }
+                    },
+                { "$addFields": { "regionId": { "$toObjectId": "$asmUserDetails.region_id" }}},
+                { "$lookup": {
+                    "from": "regions",
+                    "localField": "regionId",
+                    "foreignField": "_id",
+                    "as": "asmUserDetails.regionDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$asmUserDetails.regionDetails",
+                      }
+                    },
+                    {
+                        "$project": {
+                          "_id": 1,
+                          "sender_id":1,
+                          "product_name":1,
+                          "distributed_amount":1,
+                          "recieved_date":1,
+                          "reciever_id":1,
+                          "adminUserDetails.name":1,
+                          "asmUserDetails.name":1,
+                          "asmUserDetails.region_id":1,
+                          "productDetails.category":1,
+                          "productDetails.secondary_category":1,
+                          "productDetails.unit_price":1,
+                          "asmUserDetails.regionDetails.region_name":1
+                        }
+                    }
+            ]).toArray();
+            console.log(req.query.productName);
+            if(req.query.productName || req.query.adminName || req.query.asmName || req.query.zoneName ||req.query.srName || req.query.zoneName || req.query.category){
+                if(req.query.startDate===req.query.endDate){
+                    report= report.filter(sc=>
+                        (sc.product_name===(req.query.productName==="null"? sc.product_name: req.query.productName )) &&
+                        (sc.adminUserDetails.name===(req.query.adminName==="null"?sc.adminUserDetails.name: req.query.adminName  )) &&
+                        (sc.asmUserDetails.name===(req.query.asmName==="null"?sc.asmUserDetails.name: req.query.asmName  ))  &&
+                        (sc.asmUserDetails.regionDetails.region_name === (req.query.zoneName==="null"? sc.asmUserDetails.regionDetails.region_name : req.query.zoneName )) &&
+                        (sc.productDetails.category===(req.query.category==="null"?sc.productDetails.category : req.query.category))&&
+                        ((sc.recieved_date).split("T")[0]===(req.query.startDate==="null"? (sc.recieved_date).split("T")[0] : req.query.startDate))
+                      )
+                  }else{
+                    report= report.filter(sc=>
+                        (sc.product_name===(req.query.productName==="null"?sc.product_name : req.query.productName )) &&
+                        (sc.adminUserDetails.name===(req.query.adminName==="null"?sc.adminUserDetails.name: req.query.adminName  )) &&
+                        (sc.asmUserDetails.name===(req.query.asmName==="null"?sc.asmUserDetails.name: req.query.asmName  ))  &&
+                        (sc.asmUserDetails.regionDetails.region_name === (req.query.zoneName==="null"? sc.asmUserDetails.regionDetails.region_name : req.query.zoneName )) &&
+                        (sc.productDetails.category===(req.query.category==="null"?sc.productDetails.category : req.query.category))&&
+                        ((sc.recieved_date).split("T")[0] >=(req.query.startDate==="null"?(sc.recieved_date).split("T")[0]: (req.query.startDate))) &&
+                        ((sc.recieved_date).split("T")[0]<=(req.query.endDate==="null"?(sc.recieved_date).split("T")[0] : (req.query.endDate))) 
+                      )
+                  }
+                }
+            res.send(report)
+        })
+
+        //asm distribution to sr
+        app.get('/asm-send-sr',async(req,res)=>{
+            let query ={};
+            let report = await distributeToSrCollection.aggregate([
+                { "$addFields": { "asm": { "$toObjectId": "$sender_id" }}},
+                { "$addFields": { "sr": { "$toObjectId": "$reciever_id" }}},
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "asm",
+                    "foreignField": "_id",
+                    "as": "asmUserDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$asmUserDetails",
+                      }
+                    },
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "sr",
+                    "foreignField": "_id",
+                    "as": "srUserDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$srUserDetails",
+                      }
+                    },
+                    { "$addFields": { "admin": { "$toObjectId": "$asmUserDetails.managed_by" }}},
+                    { "$lookup": {
+                        "from": "users",
+                        "localField": "admin",
+                        "foreignField": "_id",
+                        "as": "asmUserDetails.admin"
+                      }},
+                      {
+                          $unwind: {
+                            path: "$asmUserDetails.admin",
+                          }
+                        },
+                { "$lookup": {
+                    "from": "products",
+                    "localField": "product_name",
+                    "foreignField": "product_name",
+                    "as": "productDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$productDetails",
+                      }
+                    },
+                { "$addFields": { "regionId": { "$toObjectId": "$srUserDetails.region_id" }}},
+                { "$lookup": {
+                    "from": "regions",
+                    "localField": "regionId",
+                    "foreignField": "_id",
+                    "as": "srUserDetails.regionDetails"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$srUserDetails.regionDetails",
+                      }
+                    },
+                    {
+                        "$project": {
+                          "_id": 1,
+                          "sender_id":1,
+                          "product_name":1,
+                          "distributed_amount":1,
+                          "recieved_date":1,
+                          "reciever_id":1,
+                          "asmUserDetails.name":1,
+                          "srUserDetails.name":1,
+                          "srUserDetails.region_id":1,
+                          "productDetails.category":1,
+                          "productDetails.secondary_category":1,
+                          "productDetails.unit_price":1,
+                          "srUserDetails.regionDetails.region_name":1,
+                          "asmUserDetails.admin.name":1,
+                        }
+                    }
+            ]).toArray();
+            if(req.query.productName || req.query.asmName || req.query.srName || req.query.zoneName ||req.query.srName || req.query.zoneName || req.query.category){
+                if(req.query.startDate===req.query.endDate){
+                    report= report.filter(sc=>
+                        (sc.product_name===(req.query.productName==="null"? sc.product_name: req.query.productName )) &&
+                        (sc.asmUserDetails.name===(req.query.asmName==="null"?sc.asmUserDetails.name: req.query.asmName  )) &&
+                        (sc.srUserDetails.name===(req.query.srName==="null"?sc.srUserDetails.name: req.query.srName  ))  &&
+                        (sc.srUserDetails.regionDetails.region_name === (req.query.zoneName==="null"? sc.srUserDetails.regionDetails.region_name : req.query.zoneName )) &&
+                        (sc.productDetails.category===(req.query.category==="null"?sc.productDetails.category : req.query.category))&&
+                        ((sc.recieved_date).split("T")[0]===(req.query.startDate==="null"? (sc.recieved_date).split("T")[0] : req.query.startDate))
+                      )
+                  }else{
+                    report= report.filter(sc=>
+                        (sc.product_name===(req.query.productName==="null"?sc.product_name : req.query.productName )) &&
+                        (sc.asmUserDetails.name===(req.query.asmName==="null"?sc.asmUserDetails.name: req.query.asmName  )) &&
+                        (sc.srUserDetails.name===(req.query.srName==="null"?sc.srUserDetails.name: req.query.srName  ))  &&
+                        (sc.srUserDetails.regionDetails.region_name === (req.query.zoneName==="null"? sc.srUserDetails.regionDetails.region_name : req.query.zoneName )) &&
+                        (sc.productDetails.category===(req.query.category==="null"?sc.productDetails.category : req.query.category))&&
+                        ((sc.recieved_date).split("T")[0] >=(req.query.startDate==="null"?(sc.recieved_date).split("T")[0]: (req.query.startDate))) &&
+                        ((sc.recieved_date).split("T")[0]<=(req.query.endDate==="null"?(sc.recieved_date).split("T")[0] : (req.query.endDate))) 
+                      )
+                  }
+                }
+            res.send(report)
+        })
 
         //get all due for different shops
 
@@ -1051,6 +1253,20 @@ async function run(){
             res.send(finalResult);
         })
 
+        // app.get('/set-date', async(req,res)=>{
+        //     const id = req.params.id;
+        //     const filter = {};
+        //     const option = {upsert:true};
+        //     const curdate = "2023-05-08T09:50:35.561Z";
+        //     const updatedUser ={
+        //         $set:{
+        //                 created_date:curdate,
+                
+        //         }
+        //     }
+        //     const result = await regionsCollection.updateMany(filter, updatedUser,option);
+        //     res.send(result);
+        // })
  
     }
     finally{
