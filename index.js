@@ -5,7 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const pagination = require('./utilities/pagination');
 const app = express();
 const port = process.env.PORT || 5000;
-const limit =5;
+const limit =1;
 require('dotenv').config();
 //middleware
 app.use(cors());
@@ -35,6 +35,7 @@ async function run(){
     const transactionCollection = client.db('captainPenProduct').collection('transaction'); 
     const dueTrackingCollection = client.db('captainPenProduct').collection('DueTracking'); 
     const dueRecoveryCollection = client.db('captainPenProduct').collection('dueRecovery'); 
+    const unitCollction = client.db('captainPenProduct').collection('factoryUnit'); 
     const productIndex = await productsCollection.createIndex({ "product_name":1 }, { unique: true });
     const userIndex = await userCollection.createIndex({"username":1},{ unique: true });
     const productCodeIndex = await productsCollection.createIndex({"product_code":1},{ unique: true });
@@ -1896,6 +1897,15 @@ async function run(){
             res.send(result);
         })
 
+        //get unit
+
+        app.get('/unit',async(req,res)=>{
+            const query = {};
+            const cursor = unitCollction.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
         //get all regions
 
         app.get('/region',async(req,res)=>{
@@ -1917,6 +1927,15 @@ async function run(){
             res.send(result);
         })
 
+        //paginate unit
+        app.get('/paginate-unit',async(req,res)=>{
+          let page =req.query.page || 1;
+          const unitNumber = await unitCollction.countDocuments({});
+          const paginateData = pagination(unitNumber,page);
+          const data = await unitCollction.find({}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
+          const result = {data,paginateData};
+          res.send(result);
+      })
         //get region against id
 
         app.get('/region/:id',async(req,res)=>{
@@ -2265,6 +2284,14 @@ async function run(){
         app.post('/items',async(req,res)=>{
             const item = req.body;
             const result = await primaryItemCollection.insertOne(item);
+            res.send(result);
+        })
+
+        //factory unit add
+
+        app.post('/unit',async(req,res)=>{
+            const item = req.body;
+            const result = await unitCollction.insertOne(item);
             res.send(result);
         })
 
