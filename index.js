@@ -5,7 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const pagination = require('./utilities/pagination');
 const app = express();
 const port = process.env.PORT || 5000;
-const limit =1;
+const limit = 5;
 require('dotenv').config();
 //middleware
 app.use(cors());
@@ -37,6 +37,7 @@ async function run(){
     const dueRecoveryCollection = client.db('captainPenProduct').collection('dueRecovery'); 
     const unitCollction = client.db('captainPenProduct').collection('factoryUnit'); 
     const factoryItems = client.db('captainPenProduct').collection('factoryItem'); 
+    const factoryStockCollection = client.db('captainPenProduct').collection('factoryStock'); 
     const productIndex = await productsCollection.createIndex({ "product_name":1 }, { unique: true });
     const userIndex = await userCollection.createIndex({"username":1},{ unique: true });
     const productCodeIndex = await productsCollection.createIndex({"product_code":1},{ unique: true });
@@ -1938,6 +1939,26 @@ async function run(){
           const result = {data,paginateData};
           res.send(result);
       })
+
+      //paginate factory stock
+      app.get('/paginate-factory-stock',async(req,res)=>{
+        let page =req.query.page || 1;
+        const unitNumber = await factoryStockCollection.countDocuments({});
+        const paginateData = pagination(unitNumber,page);
+        const data = await factoryStockCollection.find({}).sort({date_time:1}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
+        const result = {data,paginateData};
+        res.send(result);
+    })
+
+    //paginate factory item
+      app.get('/paginate-factory-item',async(req,res)=>{
+        let page =req.query.page || 1;
+        const unitNumber = await factoryItems.countDocuments({active:"1"});
+        const paginateData = pagination(unitNumber,page);
+        const data = await factoryItems.find({active:"1"}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
+        const result = {data,paginateData};
+        res.send(result);
+    })
         //get region against id
 
         app.get('/region/:id',async(req,res)=>{
@@ -2301,8 +2322,16 @@ async function run(){
 
         app.post('/factory-item',async(req,res)=>{
             const item = req.body;
-            const result = await factoryItems.insertOne(item);
-            res.send(result);
+            const inserted = await factoryItems.insertOne(item);
+            res.send(inserted);
+        })
+
+        //factory stock add
+
+        app.post('/factory-stock',async(req,res)=>{
+            const item = req.body;
+            const inserted = await factoryStockCollection.insertOne(item);
+            res.send(inserted);
         })
 
         //add a transcation
@@ -2438,21 +2467,68 @@ async function run(){
           const result = await unitCollction.updateOne(filter, updatedUser,option);
           res.send(result);
       })
+        //disable factory item
+        app.put('/factory-item/:id', async(req,res)=>{
+          const id = req.params.id;
+          const filter = {_id:new ObjectId(id)};
+          const option = {upsert:true};
+          const updateUnit ={
+              $set:{
+                     active:"0",
+              
+              }
+          }
+          const result = await factoryItems.updateOne(filter, updateUnit,option);
+          res.send(result);
+      })
+
       //edit unit
       app.put('/edit-unit/:id', async(req,res)=>{
         const id = req.params.id;
         const filter = {_id:new ObjectId(id)};
         const singleUnit = req.body;
-        console.log(singleUnit);
         const option = {upsert:true};
-        const updatedUser ={
+        const updateUnit ={
             $set:{
                   unit:singleUnit.unit,
                   description:singleUnit.description
             
             }
         }
-        const result = await unitCollction.updateOne(filter, updatedUser,option);
+        const result = await unitCollction.updateOne(filter, updateUnit,option);
+        res.send(result);
+    })
+    app.put('/factory-item-stock/:id', async(req,res)=>{
+      const id = req.params.id;
+      const singleUnit = req.body;
+      console.log(req.body,id);
+      const filter = {_id:new ObjectId(id)};      
+      const option = {upsert:true};
+      const updatedItem ={
+          $set:{
+                 initial_amount:singleUnit.current_stock,
+          
+          }
+      }
+      const result = await factoryItems.updateOne(filter, updatedItem,option);
+      res.send(result);
+  })
+      //edit unit
+      app.put('/edit-factory-item/:id', async(req,res)=>{
+        const id = req.params.id;
+        const filter = {_id:new ObjectId(id)};
+        const singleItem = req.body;
+        const option = {upsert:true};
+        const updateItem ={
+            $set:{
+                  item_name:singleItem.item_name,
+                  description:singleItem.description,
+                  unit_name:singleItem.unit_name,
+                  initial_amount: singleItem.initial_amount
+            
+            }
+        }
+        const result = await factoryItems.updateOne(filter, updateItem,option);
         res.send(result);
     })
         //update user region
