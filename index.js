@@ -36,10 +36,13 @@ async function run(){
     const dueTrackingCollection = client.db('captainPenProduct').collection('DueTracking'); 
     const dueRecoveryCollection = client.db('captainPenProduct').collection('dueRecovery'); 
     const unitCollction = client.db('captainPenProduct').collection('factoryUnit'); 
+    const factoryItems = client.db('captainPenProduct').collection('factoryItem'); 
     const productIndex = await productsCollection.createIndex({ "product_name":1 }, { unique: true });
     const userIndex = await userCollection.createIndex({"username":1},{ unique: true });
     const productCodeIndex = await productsCollection.createIndex({"product_code":1},{ unique: true });
     const regionNameIndex = await regionsCollection.createIndex({"region_name":1},{unique:true});
+    const unitIndex = await unitCollction.createIndex({"unit":1},{unique:true});
+    const factoryItemIndex = await factoryItems.createIndex({"item_name":1},{unique:true});
     try{
 
         //get all users
@@ -1900,8 +1903,7 @@ async function run(){
         //get unit
 
         app.get('/unit',async(req,res)=>{
-            const query = {};
-            const cursor = unitCollction.find(query);
+            const cursor = unitCollction.find({active:"1"});
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -1930,9 +1932,9 @@ async function run(){
         //paginate unit
         app.get('/paginate-unit',async(req,res)=>{
           let page =req.query.page || 1;
-          const unitNumber = await unitCollction.countDocuments({});
+          const unitNumber = await unitCollction.countDocuments({active:"1"});
           const paginateData = pagination(unitNumber,page);
-          const data = await unitCollction.find({}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
+          const data = await unitCollction.find({active:"1"}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
           const result = {data,paginateData};
           res.send(result);
       })
@@ -2295,6 +2297,14 @@ async function run(){
             res.send(result);
         })
 
+        //factory item add
+
+        app.post('/factory-item',async(req,res)=>{
+            const item = req.body;
+            const result = await factoryItems.insertOne(item);
+            res.send(result);
+        })
+
         //add a transcation
 
         app.post('/transaction',async(req,res)=>{
@@ -2414,6 +2424,37 @@ async function run(){
             res.send(result);
         })
 
+        //disable unit
+        app.put('/unit/:id', async(req,res)=>{
+          const id = req.params.id;
+          const filter = {_id:new ObjectId(id)};
+          const option = {upsert:true};
+          const updatedUser ={
+              $set:{
+                     active:"0",
+              
+              }
+          }
+          const result = await unitCollction.updateOne(filter, updatedUser,option);
+          res.send(result);
+      })
+      //edit unit
+      app.put('/edit-unit/:id', async(req,res)=>{
+        const id = req.params.id;
+        const filter = {_id:new ObjectId(id)};
+        const singleUnit = req.body;
+        console.log(singleUnit);
+        const option = {upsert:true};
+        const updatedUser ={
+            $set:{
+                  unit:singleUnit.unit,
+                  description:singleUnit.description
+            
+            }
+        }
+        const result = await unitCollction.updateOne(filter, updatedUser,option);
+        res.send(result);
+    })
         //update user region
 
         app.put('/users-region/:id', async(req,res)=>{
