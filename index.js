@@ -222,6 +222,7 @@ async function run(){
         const finaldata = {data,paginateData }
         res.send(finaldata);
       })
+      //paginated sales
         app.get('/sales',async(req,res)=>{
             let page =req.query.page || 1 ;
             const skipAmount = (page-1)*limit;
@@ -471,6 +472,127 @@ async function run(){
               const finalResult  = {data ,paginateData}
              res.send(finalResult);
         })
+        //all sales
+        app.get('/all-sales',async(req,res)=>{
+            const result = await  distributionToShopCollection.aggregate([
+              { "$addFields": { "srId": { "$toObjectId": "$sender_id" }}},
+              { "$addFields": { "shopId": { "$toObjectId": "$reciever_id" }}},  
+              { "$lookup": {
+                "from": "users",
+                "localField": "srId",
+                "foreignField": "_id",
+                "as": "userDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$userDetails",
+                  }
+                },
+              { "$lookup": {
+                "from": "shops",
+                "localField": "shopId",
+                "foreignField": "_id",
+                "as": "shopDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$shopDetails",
+                  }
+                },
+              { "$lookup": {
+                  "from": "transaction",
+                  "localField": "transaction_id",
+                  "foreignField": "transaction_id",
+                  "as": "transactionDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$transactionDetails",
+                    }
+                  },
+                
+              { "$addFields": { "asmId": { "$toObjectId": "$userDetails.managed_by" }}},
+              { "$addFields": { "regionId": { "$toObjectId": "$userDetails.region_id" }}},
+              { "$lookup": {
+                  "from": "regions",
+                  "localField": "regionId",
+                  "foreignField": "_id",
+                  "as": "userDetails.zone"
+                }},
+                {
+                  $unwind: {
+                    path: "$userDetails.zone",
+                  }
+                },
+              { "$lookup": {
+                  "from": "users",
+                  "localField": "asmId",
+                  "foreignField": "_id",
+                  "as": "userDetails.asm"
+                }},
+                {
+                  $unwind: {
+                    path: "$userDetails.asm",
+                  }
+                },
+                { "$addFields": { "adminId": { "$toObjectId": "$userDetails.asm.managed_by" }}},
+                { "$lookup": {
+                  "from": "users",
+                  "localField": "adminId",
+                  "foreignField": "_id",
+                  "as": "userDetails.asm.admin"
+                }},
+                
+                {
+                  $unwind: {
+                    path: "$userDetails.asm.admin",
+                  }
+                },
+                { "$lookup": {
+                  "from": "products",
+                  "localField": "product_name",
+                  "foreignField": "product_name",
+                  "as": "productDetails"
+                }},
+                {
+                  $unwind: {
+                    path: "$productDetails",
+                  }
+                },
+              {
+                  "$project": {
+                    "_id": 1,
+                    "product_name":1,
+                    "distributed_amount":1,
+                    "recieved_date":1,
+                    "distributed_amount":1,
+                    "price_per_unit":1,
+                    "userDetails._id":1,
+                    "userDetails.name":1,
+                    "userDetails.region_id":1,
+                    "userDetails.managed_by":1,
+                    "userDetails.zone.region_name":1, 
+                    "userDetails.zone._id":1, 
+                    "userDetails.asm.name":1,
+                    "userDetails.asm.managed_by":1,
+                    "userDetails.asm.admin.name":1,
+                    "shopDetails._id":1,
+                    "shopDetails.shop_name":1,
+                    "shopDetails.address":1,
+                    "transactionDetails.transaction_id":1,
+                    "transactionDetails.bill_img":1,
+                    "transactionDetails.discount":1,
+                    "transactionDetails.due":1, 
+                    "transactionDetails.total_bill":1, 
+                    "productDetails.unit_price":1,
+                    "productDetails.category":1,
+                    "productDetails.secondary_category":1,
+                  }
+                },
+          
+            ]).toArray();
+           res.send(result);
+      })
         app.get('/filtered-sales',async(req,res)=>{
           let query ={};
           let salesCollection =await  distributionToShopCollection.aggregate([
@@ -1386,6 +1508,77 @@ async function run(){
             const result = {data,paginateData}
             res.send(result)
         })
+
+        // alll distribution to asm
+        app.get('/all-admin-send-asm',async(req,res)=>{
+          let report = await distributedProductsCollection.aggregate([
+              { "$addFields": { "admin": { "$toObjectId": "$sender_id" }}},
+              { "$addFields": { "asm": { "$toObjectId": "$reciever_id" }}},
+              { "$lookup": {
+                  "from": "users",
+                  "localField": "admin",
+                  "foreignField": "_id",
+                  "as": "adminUserDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$adminUserDetails",
+                    }
+                  },
+              { "$lookup": {
+                  "from": "users",
+                  "localField": "asm",
+                  "foreignField": "_id",
+                  "as": "asmUserDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$asmUserDetails",
+                    }
+                  },
+              { "$lookup": {
+                  "from": "products",
+                  "localField": "product_name",
+                  "foreignField": "product_name",
+                  "as": "productDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$productDetails",
+                    }
+                  },
+              { "$addFields": { "regionId": { "$toObjectId": "$asmUserDetails.region_id" }}},
+              { "$lookup": {
+                  "from": "regions",
+                  "localField": "regionId",
+                  "foreignField": "_id",
+                  "as": "asmUserDetails.regionDetails"
+                }},
+                {
+                    $unwind: {
+                      path: "$asmUserDetails.regionDetails",
+                    }
+                  },
+                  {
+                      "$project": {
+                        "_id": 1,
+                        "sender_id":1,
+                        "product_name":1,
+                        "distributed_amount":1,
+                        "recieved_date":1,
+                        "reciever_id":1,
+                        "adminUserDetails.name":1,
+                        "asmUserDetails.name":1,
+                        "asmUserDetails.region_id":1,
+                        "productDetails.category":1,
+                        "productDetails.secondary_category":1,
+                        "productDetails.unit_price":1,
+                        "asmUserDetails.regionDetails.region_name":1
+                      }
+                  }
+          ]).toArray();
+          res.send(report)
+      })
         //admin distribution to asm filtered
         app.get('/filtered-admin-send-asm',async(req,res)=>{
             let query ={};
@@ -1655,6 +1848,91 @@ async function run(){
           const result = {data,paginateData};
             res.send(result)
         })
+
+        //all asm distribution to sr for reporting
+        app.get('/all-asm-send-sr',async(req,res)=>{
+         
+         const report = await distributeToSrCollection.aggregate([
+            { "$addFields": { "asm": { "$toObjectId": "$sender_id" }}},
+            { "$addFields": { "sr": { "$toObjectId": "$reciever_id" }}},
+            { "$lookup": {
+                "from": "users",
+                "localField": "asm",
+                "foreignField": "_id",
+                "as": "asmUserDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$asmUserDetails",
+                  }
+                },
+            { "$lookup": {
+                "from": "users",
+                "localField": "sr",
+                "foreignField": "_id",
+                "as": "srUserDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$srUserDetails",
+                  }
+                },
+                { "$addFields": { "admin": { "$toObjectId": "$asmUserDetails.managed_by" }}},
+                { "$lookup": {
+                    "from": "users",
+                    "localField": "admin",
+                    "foreignField": "_id",
+                    "as": "asmUserDetails.admin"
+                  }},
+                  {
+                      $unwind: {
+                        path: "$asmUserDetails.admin",
+                      }
+                    },
+            { "$lookup": {
+                "from": "products",
+                "localField": "product_name",
+                "foreignField": "product_name",
+                "as": "productDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$productDetails",
+                  }
+                },
+            { "$addFields": { "regionId": { "$toObjectId": "$srUserDetails.region_id" }}},
+            { "$lookup": {
+                "from": "regions",
+                "localField": "regionId",
+                "foreignField": "_id",
+                "as": "srUserDetails.regionDetails"
+              }},
+              {
+                  $unwind: {
+                    path: "$srUserDetails.regionDetails",
+                  }
+                },
+                {
+                    "$project": {
+                      "_id": 1,
+                      "sender_id":1,
+                      "product_name":1,
+                      "distributed_amount":1,
+                      "recieved_date":1,
+                      "reciever_id":1,
+                      "asmUserDetails.name":1,
+                      "srUserDetails.name":1,
+                      "srUserDetails.region_id":1,
+                      "productDetails.category":1,
+                      "productDetails.secondary_category":1,
+                      "productDetails.unit_price":1,
+                      "srUserDetails.regionDetails.region_name":1,
+                      "asmUserDetails.admin.name":1,
+                    }
+                },
+        ]).toArray();
+          res.send(report)
+      })
 
       //for filtering asm to sr report
         app.get('/filtered-asm-send-sr',async(req,res)=>{
@@ -1940,14 +2218,34 @@ async function run(){
           res.send(result);
       })
 
-      //paginate factory stock
+      // factory stock
+      app.get('/factory-stock',async(req,res)=>{
+        let query = {};
+        if(req.query){
+          query = req.query;
+        }
+        const data = await factoryStockCollection.find(query).sort({date_time:-1}).toArray();
+        res.send(data);
+    })
+
+    //paginate factory stock
       app.get('/paginate-factory-stock',async(req,res)=>{
         let page =req.query.page || 1;
         const unitNumber = await factoryStockCollection.countDocuments({});
         const paginateData = pagination(unitNumber,page);
-        const data = await factoryStockCollection.find({}).sort({date_time:1}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
+        const data = await factoryStockCollection.find({}).sort({date_time:-1}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
         const result = {data,paginateData};
         res.send(result);
+    })
+
+    //factory item
+      app.get('/factory-item',async(req,res)=>{
+        let query={};
+        if(req.query){
+          query = req.query;
+        }
+        const data = await factoryItems.find(query).toArray();
+        res.send(data);
     })
 
     //paginate factory item
@@ -1983,15 +2281,20 @@ async function run(){
         //paginate product
         app.get('/paginate-product',async(req,res)=>{
             let page = req.query.page || 1 ;
-            const totalProducts = await productsCollection.countDocuments({});
+            const totalProducts = await productsCollection.countDocuments({active:"1"});
             const  paginateData = pagination(totalProducts,page);
             const data= await productsCollection.find({}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();
             const result = {data,paginateData};
             res.send(result);
         })
 
+        //all product
+        app.get('/all-product-d',async(req,res)=>{
+          const data= await productsCollection.find({active:"1"}).toArray();         
+          res.send(data);
+      })
         //get products with proper item name
-
+      
         app.get('/product-collection',async(req,res)=>{
             const products = await productsCollection.aggregate([
                 { "$addFields": { "itemId": { "$toObjectId": "$item_id" }}},
@@ -2000,7 +2303,8 @@ async function run(){
                   "localField": "itemId",
                   "foreignField": "_id",
                   "as": "itemDetails"
-                }}
+                }},
+                { $match: { "active": "1" }},
               ]).toArray();
             res.send(products);
         })
@@ -2009,7 +2313,7 @@ async function run(){
 
         app.get('/all-products',async(req,res)=>{
             const query = {};
-            const cursor = productsCollection.find(query);
+            const cursor = productsCollection.find({active:"1"});
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -2149,9 +2453,6 @@ async function run(){
         
         
         //get user role from user and role table
-        app.get('/user-role',async(req,res)=>{
-
-        })
         
         //get all layers of item
         app.get('/item-layers',async(req,res)=>{
@@ -2452,6 +2753,22 @@ async function run(){
             const result = await userCollection.updateOne(filter, updatedUser,option);
             res.send(result);
         })
+        //update item
+
+        app.put('/item/:id', async(req,res)=>{
+            const id = req.params.id;
+            const filter = {_id:new ObjectId(id)};
+            const item = req.body;
+            const option = {upsert:true};
+            const updateditem ={
+                $set:{
+                  name:item.item_name,
+                
+                }
+            }
+            const result = await primaryItemCollection.updateOne(filter, updateditem,option);
+            res.send(result);
+        })
 
         //disable unit
         app.put('/unit/:id', async(req,res)=>{
@@ -2467,6 +2784,40 @@ async function run(){
           const result = await unitCollction.updateOne(filter, updatedUser,option);
           res.send(result);
       })
+        //disable product
+        app.put('/product-collection/:id', async(req,res)=>{
+          const id = req.params.id;
+          const filter = {_id:new ObjectId(id)};
+          const option = {upsert:true};
+          const product ={
+              $set:{
+                     active:"0",
+              
+              }
+          }
+          const result = await productsCollection.updateOne(filter, product,option);
+          res.send(result);
+      })
+
+      //edit product information
+        app.put('/edit-product/:id', async(req,res)=>{
+          const id = req.params.id;
+          const product = req.body;
+          const filter = {_id:new ObjectId(id)};
+          const option = {upsert:true};
+          const updatedProduct ={
+              $set:{
+                     product_name:product.product_name,
+                     product_code:product.product_code,
+                     unit_price:product.unit_price,
+                     total_pieces:product.total_pieces
+              
+              }
+          }
+          const result = await productsCollection.updateOne(filter, updatedProduct,option);
+          res.send(result);
+      })
+
         //disable factory item
         app.put('/factory-item/:id', async(req,res)=>{
           const id = req.params.id;
@@ -2498,7 +2849,9 @@ async function run(){
         const result = await unitCollction.updateOne(filter, updateUnit,option);
         res.send(result);
     })
-    app.put('/factory-item-stock/:id', async(req,res)=>{
+
+    //edit factory item 
+     app.put('/factory-item-stock/:id', async(req,res)=>{
       const id = req.params.id;
       const singleUnit = req.body;
       console.log(req.body,id);
@@ -2506,14 +2859,14 @@ async function run(){
       const option = {upsert:true};
       const updatedItem ={
           $set:{
-                 initial_amount:singleUnit.current_stock,
+                 current_amount:singleUnit.current_stock,
           
           }
       }
       const result = await factoryItems.updateOne(filter, updatedItem,option);
       res.send(result);
-  })
-      //edit unit
+     })
+      //edit factory-item
       app.put('/edit-factory-item/:id', async(req,res)=>{
         const id = req.params.id;
         const filter = {_id:new ObjectId(id)};
@@ -2531,6 +2884,24 @@ async function run(){
         const result = await factoryItems.updateOne(filter, updateItem,option);
         res.send(result);
     })
+
+    //update factory stock data 
+    app.put('/edit-factory-stock/:id', async(req,res)=>{
+      const id = req.params.id;
+      const filter = {_id:new ObjectId(id)};
+      const singleItem = req.body;
+      const option = {upsert:true};
+      const updateFactoryStock ={
+          $set:{
+                current_stock:singleItem.current_stock,
+                previous_stock:singleItem.previous_stock,
+                increase_amount: singleItem.increase_amount,
+                decrease_amount: singleItem.decrease_amount          
+          }
+      }
+      const result = await factoryStockCollection.updateOne(filter, updateFactoryStock,option);
+      res.send(result);
+  })
         //update user region
 
         app.put('/users-region/:id', async(req,res)=>{
