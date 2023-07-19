@@ -58,6 +58,7 @@ async function run(){
             const users = await cursor.toArray();
             res.send(users);
         })
+        
         app.get('/paginated-users',async(req,res)=>{
           let page= req.query.page || 1;
           let countDoc, userData,paginateData ;
@@ -76,152 +77,7 @@ async function run(){
           }
           res.send(user);
       })
-      app.get('/admin-shops/:id',async(req,res)=>{
-        const adminId = req.params.id;
-        const page = req.query.page || 1;
-        const adminShopCount = await shopsCollection.aggregate([
-          { "$addFields": { "srId": { "$toObjectId": "$managed_by" }}},
-          { "$lookup": {
-            "from": "users",
-            "localField": "srId",
-            "foreignField": "_id",
-            "as": "userDetails"
-          }},
-          {
-              $unwind: {
-                path: "$userDetails",
-              }
-            },
-            { "$addFields": { "srId": { "$toObjectId": "$userDetails.managed_by" }}},
-            { "$lookup": {
-              "from": "users",
-              "localField": "srId",
-              "foreignField": "_id",
-              "as": "userDetailsAsm"
-            }},
-            {
-              $unwind: {
-                path: "$userDetailsAsm",
-              }
-            },
-            { "$addFields": { "asmId": { "$toObjectId": "$userDetailsAsm.managed_by" }}},
-            { "$lookup": {
-              "from": "users",
-              "localField": "asmId",
-              "foreignField": "_id",
-              "as": "userDetailsAdmin"
-            }},
-            {
-              $unwind: {
-                path: "$userDetailsAdmin",
-              }
-            },
-            { $match: { "userDetailsAdmin._id": new ObjectId(adminId)} },
-            {
-              $count: "shopCount"
-            },
-            {
-              "$project": {
-                "shopCount":1,
-                "_id": 1,
-                "shop_name":1,
-                "owner_name":1,                
-                "address":1,                
-                "created_at":1,                
-                "contact_no":1,
-                "district_id":1,
-                "division":1,
-                "managed_by":1,                
-                "region_id":1,                
-                "subdistrict":1,                
-                "thana":1,                
-                "userDetails._id":1,
-                "userDetails.name":1,
-                "userDetails.managed_by":1,
-                "userDetailsAsm._id":1,
-                "userDetailsAsm.name":1,
-                "userDetailsAsm.managed_by":1,
-                "userDetailsAdmin._id":1,
-                "userDetailsAdmin.name":1,
-                
-              }
-            }
-            
-        ]).toArray();
-        const countShop= adminShopCount[0].shopCount;
-        let paginateData = pagination(countShop,page);
-        const result = await  shopsCollection.aggregate([
-          { "$addFields": { "srId": { "$toObjectId": "$managed_by" }}},
-          { "$lookup": {
-            "from": "users",
-            "localField": "srId",
-            "foreignField": "_id",
-            "as": "userDetails"
-          }},
-          {
-              $unwind: {
-                path: "$userDetails",
-              }
-            },
-            { "$addFields": { "srId": { "$toObjectId": "$userDetails.managed_by" }}},
-            { "$lookup": {
-              "from": "users",
-              "localField": "srId",
-              "foreignField": "_id",
-              "as": "userDetailsAsm"
-            }},
-            {
-              $unwind: {
-                path: "$userDetailsAsm",
-              }
-            },
-            { "$addFields": { "asmId": { "$toObjectId": "$userDetailsAsm.managed_by" }}},
-            { "$lookup": {
-              "from": "users",
-              "localField": "asmId",
-              "foreignField": "_id",
-              "as": "userDetailsAdmin"
-            }},
-            {
-              $unwind: {
-                path: "$userDetailsAdmin",
-              }
-            },
-            { $match: { "userDetailsAdmin._id": new ObjectId(adminId)} },
-            {
-              "$project": {
-                "_id": 1,
-                "shop_name":1,
-                "owner_name":1,                
-                "address":1,                
-                "created_at":1,                
-                "contact_no":1,
-                "district_id":1,
-                "division":1,
-                "managed_by":1,                
-                "region_id":1,                
-                "subdistrict":1,                
-                "thana":1,                
-                "userDetails._id":1,
-                "userDetails.name":1,
-                "userDetails.managed_by":1,
-                "userDetailsAsm._id":1,
-                "userDetailsAsm.name":1,
-                "userDetailsAsm.managed_by":1,
-                "userDetailsAdmin._id":1,
-                "userDetailsAdmin.name":1,
-                
-              }
-            },
-            { '$facet'    : {
-              data: [ { $skip:paginateData.skippedIndex }, { $limit: paginateData.perPage } ] // add projection here wish you re-shape the docs
-          } }
       
-        ]).toArray();
-        const data = result[0].data;
-        const finaldata = {data,paginateData }
-        res.send(finaldata);
-      })
       //paginated sales
         app.get('/sales',async(req,res)=>{
             let page =req.query.page || 1 ;
@@ -2134,6 +1990,19 @@ async function run(){
           }
           res.send(shops);
       })
+      //addmin asm paginated shops from regions
+        app.get('/paginated-regional-shops',async(req,res)=>{
+          let page= req.query.page || 1;
+          let countDoc, shopdata,paginateData ;          
+          let regionId = req.query.regionId;
+            countDoc=await shopsCollection.countDocuments({region_id:regionId});            
+            paginateData  = pagination(countDoc,page)            
+            shopdata =await shopsCollection.find({region_id:regionId}).skip(paginateData.skippedIndex).limit(paginateData.perPage).toArray();            
+            const shops = {
+            shopdata,paginateData
+            }
+            res.send(shops);
+      })
       
         
         // get shop against id
@@ -2737,6 +2606,26 @@ async function run(){
             res.send(result);
         })
 
+        //update a shop
+        app.put('/shop/:id',async(req,res)=>{
+          const id = req.params.id;
+          const filter = {_id:new ObjectId(id)};
+          const shop = req.body;
+          const option = {upsert:true};
+          const updatedShop ={
+              $set:{
+                      shop_name:shop.shop_name,
+                      contact_no:shop.contact_no,
+                      address:shop.address,
+                      owner_name:shop.owner_name,
+                      managed_by:shop.managed_by
+              
+              }
+          }
+          const result = await shopsCollection.updateOne(filter, updatedShop,option);
+          res.send(result);
+        })
+
         //update user
 
         app.put('/users/:id', async(req,res)=>{
@@ -2886,7 +2775,7 @@ async function run(){
     })
 
     //update factory stock data 
-    app.put('/edit-factory-stock/:id', async(req,res)=>{
+     app.put('/edit-factory-stock/:id', async(req,res)=>{
       const id = req.params.id;
       const filter = {_id:new ObjectId(id)};
       const singleItem = req.body;
@@ -2901,7 +2790,24 @@ async function run(){
       }
       const result = await factoryStockCollection.updateOne(filter, updateFactoryStock,option);
       res.send(result);
-  })
+     })
+     
+     //add sr to shop
+     
+     app.put('/assign-sr-shop/:id', async(req,res)=>{
+      const id = req.params.id;
+      const filter = {_id:new ObjectId(id)};
+      const shop = req.body;
+      const option = {upsert:true};
+      const updateShop ={
+          $set:{
+                managed_by:shop.assigned         
+          }
+      }
+      const result = await shopsCollection.updateOne(filter, updateShop,option);
+      res.send(result);
+     })
+
         //update user region
 
         app.put('/users-region/:id', async(req,res)=>{
